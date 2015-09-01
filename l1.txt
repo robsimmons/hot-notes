@@ -1,0 +1,274 @@
+Type preserving compilation
+  +  debugging
+ (+) optimization (not a topic of this class)
+ (+) certified code (not a topic of this class)
+  +  understanding compiler structure
+ (-) might lose optimizations (there's evidence this is untrue!)
+ (-) more work (actually debugging advantages of hot compilation are huge)
+  -  efficiency issues (the types get to be REALLY REALLY BIG)
+
+getting a compiler for a higher-order typed language right is hard
+even with types. it's even harder without types!
+
+representing tree structure of types with a dag
+
+    ->              ->
+   /  \    versus  |  | 
+ int   int         int 
+
+          ->                  ->
+      /--/ \--\              |  |
+    ->         ->    versus   ->
+   /  \       /  \           |  |
+ int   int  int   int         int
+
+once you try to minimize memory usage, you make the compiler more work
+again (maybe as much work as writing a compiler without types?)
+
+ADMINSTRATION:
+ Complete 7 projects: A
+ Complete 6 projects: B
+ Complete 5 projects: C
+ Complete 4 projects: D
+ Complete 1, 2, 3 projects: R
+ No textbook because Karl hasn't written one yet
+ No lecture notes because Karl writes things on the board
+ You really have to come to class, need to make sure there are good notetakers
+ The way that all projects work is that there is a Standard ML
+   signature and you implement that signature. Don't, you know, change
+   the signature, that sure won't work. Remove all I/O before handing in.
+
+GRADING
+ Assignments are automatically graded on a binary scale
+ In past: when Karl runs the Autograder. In future: Autolab. This year:?
+ Pass: does the thing Karl's compiler does. Fail: otherwise.
+ The first few assignments: you only have to generate code that passes Karl's 
+   autograder.
+ An interesting property of type-preserving compilation - for Standard
+   ML, at least - is that it's really difficult to do things wrong and
+   end up with something type correct, unless you're doing it on
+   purpose.
+ There are exceptions: compiling 2-1 as 1-2 or whatnot
+
+THE HIGHER ORDER TYPED COMPILER STANDARD ML COMPILER (annotated with
+the order in which the course project will cover them)
+ 
+STANDARD ML
+  vvvvvv              Elaboration (Includes typechecking)
+ (8) vvv              Does NOT include type inference (we don't cover this)
+  vvvvvv
+ILmodule
+  vvvvvv              Phase separation
+ (6) vvv
+  vvvvvv
+ILdirect 
+  vvvvvv              CPS Conversion 
+ (1) vvv                - makes order of evaluation explicit
+  vvvvvv                - gives a name to all intermediate computation steps
+  vvvvvv                - makes control flow into a data structure we can access
+ILcps
+  vvvvvv              Closure conversion
+ (2) vvv                - breaks functions into CLOSED CODE and an ENVIRONMENT
+  vvvvvv                - environment tells you what code's free vars are
+ILclosure
+  vvvvvv              Hoisting
+ (3) vvv                - separate independent computations
+  vvvvvv
+ILhoist
+  vvvvvv              Make all allocations explicit
+ (4) vvv
+  vvvvvv
+ILalloc
+  vvvvvv              Code generation 
+ (5) vvv
+  vvvvvv
+C                     (Runtime issue: garbage collection is (7)
+
+Hourglass effect of complexity:
+ - ILdirect is as simple as it gets in terms of familiar type theory
+ - Successors to ILcps are dealing with the fact that processors
+   (since the Lisp machine) don't actually understand
+   alpha-equivalence and substitution.
+ - Standard ML has...
+    ...crap that we're just ignoring (equality types, infix)
+    ...convienent things that don't make any type theoretic sense (open Int)
+    ...things where we don't yet have the last word on theory (pattern matching)
+ - ILhoist has the simplest types
+ - After ILhoist we'd need dependent types to keep on doing typed
+   compilation, and we don't talk about those (Karl didn't even use the words
+   "dependent types," I don't think)
+
+======== Getting down to buisness
+
+SYSTEM F
+
+Syntax, where we use c and not τ to save ourselves some rewriting later
+ c ::= α | c -> c | ∀α.c
+ e ::= x | λx:c.e | e e | Λα.e | A[c]
+ Γ ::= · | Γ, x:c | Γ, α:type
+
+Γ ⊢ c : type (This just means that all the variables in c are bound in Γ)
+Γ ⊢ e : c    (Presumes Γ ⊢ c : type?)
+
+SYSTEM F, REFACTORED
+ k ::= type
+ c ::= α | c -> c | ∀α:k.c
+ e ::= x | λx:c.e | e e | Λα:k.e | A[c]
+ Γ ::= · | Γ, x:c | Γ, α:type
+
+What is "list" in Standard ML? It's not a type, it's a type function!
+"list int" is the real type. Which is written in Standard ML as "int
+list" for annoying reasons.  
+
+So can we write our own functions from functions to functions? That's...
+
+SYSTEM F_ω (with product kinds)
+ k ::= type | k -> k | k * k
+ c ::= α | c -> c | ∀α:k.c | λα:k.c | c c | <c1, c2> | π1 c | π2 c
+ e ::= x | λx:c.e | e e | Λα:k.e | A[c]
+ Γ ::= · | Γ, x:c | Γ, α:type
+
+Convetion: when we write a *constructor* c that we think of as being
+classified by type (Γ ⊢ c : type) we may write τ instead of c. That
+doesn't mean it *is* a type it means we expect it to be. 
+
+For example, we expect that when we write Γ ⊢ e : c that c is
+classified by type so we will often write Γ ⊢ e : τ.
+
+x : τ ∈ Γ
+----------
+Γ ⊢ x : τ
+
+Question: Γ ⊢ τ : type ???
+Γ, x:τ ⊢ e : ρ
+--------------------
+Γ ⊢ λx:τ.e : τ->ρ
+
+The question refers to a subtle but very important question of how we
+set up the type system.
+ - Γ ⊢ e : τ
+    --1-- implies Γ ok?
+    --2-- assumes Γ ok?
+
+ In --1--, then if Γ ⊢ e : τ then Γ ok
+ In --2--, then we need Γ ok in order to even talk about Γ ⊢ e : τ
+
+--2-- Maintaining invariant that context is well formed
+x : τ ∈ Γ
+----------
+Γ ⊢ x : τ
+
+Γ ⊢ τ : type
+Γ, x:τ ⊢ e : ρ
+--------------------
+Γ ⊢ λx:τ.e : τ->ρ
+
+--1-- No actual typechecker in its right mind works like this:
+x : τ ∈ Γ
+Γ ⊢ τ : type
+-------------
+Γ ⊢ x : τ
+
+Γ, x:τ ⊢ e : ρ
+--------------------
+Γ ⊢ λx:τ.e : τ->ρ
+
+AT THIS POINT I ASKED A QUESTION: 
+
+Why do we not require both Γ ok AND Γ ⊢ τ : type in order to even talk
+about Γ ⊢ e : τ. The reason we DON'T do this is because, in HOT, all
+the inference rules we write are actually code that we intend to write
+in a functional langauge. We're going to be getting an untrusted
+expression and an untrusted type out of the elaborator, and we have to
+check that they are **both** well formed and **both** good. It's nice
+that we can do this simultaneously.
+
+SO, CONTINUING ON with --2--
+
+**** JUDGMENT Γ ⊢ e : τ
+
+x : τ ∈ Γ
+----------
+Γ ⊢ x : τ
+
+Γ ⊢ τ : type
+Γ, x:τ ⊢ e : ρ
+--------------------
+Γ ⊢ λx:τ.e : τ->ρ
+
+Γ ⊢ e1 : τ->ρ
+Γ ⊢ e2 : τ
+--------------------
+Γ ⊢ e1 e2 : ρ
+
+(we can't write an ill-formed k)
+Γ, α:k ⊢ e : τ
+-------------------
+Γ ⊢ Λα:k.e : ∀α:k.τ
+
+Γ ⊢ e : ∀α:k.τ 
+Γ ⊢ c : k
+-------------------
+Γ ⊢ e[c] : [c/α]τ
+
+**** JUDGMENT Γ ⊢ c : k
+
+α : k ∈ Γ
+-------------------
+Γ ⊢ α : k
+
+(we can't write an ill-formed k)
+Γ, α:k ⊢ c : k'
+--------------------
+Γ ⊢ λα:k.c : k -> k'
+
+Γ ⊢ c1 : k -> k'
+Γ ⊢ c2 : k
+--------------------
+Γ ⊢ c1 c2 : k'
+
+Γ ⊢ c1 : k1
+Γ ⊢ c2 : k2
+--------------------
+Γ ⊢ <c1,c2> : k1*k2
+
+Γ ⊢ c : k1*k2
+-------------------
+Γ ⊢ π1 c : k1
+
+Γ ⊢ c : k1*k2
+-------------------
+Γ ⊢ π2 c : k2
+
+Γ ⊢ c1 : type
+Γ ⊢ c2 : type
+-------------------
+Γ ⊢ c1->c2 : type
+
+(we can't write an ill-formed k)
+Γ, a:k ⊢ c : type
+-------------------
+Γ ⊢ ∀α:k.c : type
+
+THIS IS SUPER WEIRD EVEN THOUGH IT DOESN'T LOOK WEIRD: 
+ - λα:k.c is NEVER a type (never classifies terms e)
+ - ∀α:k.c can ONLY be a type
+ - <c1,c2> is NEVER a type (never classifies terms e)
+ - c1->c2 is ONLY ever a type
+
+A PROBLEM:
+ Assume f : ∀γ:(type->type). γ(int) -> σ 
+ f [ λα:type.α ] 12 doesn't typecheck!
+
+   [λα:type.α/γ] γ(int) -> σ 
+ is the same as
+   (λα:type.α)(int) → σ
+
+ therefore we have 
+   f [ λα:type.α ] : (λα:type.α)(int) → σ
+ and
+   12 : int
+ but
+   int 
+ is not the same as 
+   (λα.α)int
