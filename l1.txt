@@ -82,7 +82,7 @@ ILalloc
   vvvvvv              Code generation 
  (5) vvv
   vvvvvv
-C                     (Runtime issue: garbage collection is (7)
+C                     Runtime issue: garbage collection is topic (7)
 
 Hourglass effect of complexity:
  - ILdirect is as simple as it gets in terms of familiar type theory
@@ -108,7 +108,7 @@ Syntax, where we use c and not τ to save ourselves some rewriting later
  Γ ::= · | Γ, x:c | Γ, α:type
 
 Γ ⊢ c : type (This just means that all the variables in c are bound in Γ)
-Γ ⊢ e : c    (Presumes Γ ⊢ c : type?)
+Γ ⊢ e : c
 
 SYSTEM F, REFACTORED
  k ::= type
@@ -177,11 +177,10 @@ AT THIS POINT I ASKED A QUESTION:
 
 Why do we not require both Γ ok AND Γ ⊢ τ : type in order to even talk
 about Γ ⊢ e : τ. The reason we DON'T do this is because, in HOT, all
-the inference rules we write are actually code that we intend to write
-in a functional langauge. We're going to be getting an untrusted
-expression and an untrusted type out of the elaborator, and we have to
-check that they are **both** well formed and **both** good. It's nice
-that we can do this simultaneously.
+the inference rules we write are actually secretly code that we intend
+to write in a functional langauge. We're going to be getting an
+untrusted expression and an untrusted type out of the elaborator, and
+we have to check that they are **both** well formed and **both** good.
 
 SO, CONTINUING ON with --2--
 
